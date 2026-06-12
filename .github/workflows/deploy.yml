@@ -1,0 +1,27 @@
+name: Ecommerce Backend CI/CD
+
+# 1. Tell GitHub WHEN to run this script
+on:
+  push:
+    branches:
+      - main
+
+# 2. Tell GitHub WHAT to do
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Log into AWS and Deploy Code
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          # 3. The exact commands to run on your EC2 server
+          script: |
+            cd ~/groc-v2-backend
+            git pull origin main
+            source venv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart fastapi
