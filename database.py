@@ -7,7 +7,7 @@ load_dotenv()
 
 db_pwd=os.getenv("DB_PWD")
 
-DB_URL=f"postgresql://admin:{db_pwd}@localhost:5432/admin"#postgresql://user:your_password@localhost:5432/admin"
+DB_URL=f"postgresql://admin:{db_pwd}@localhost:5432/admin"#postgresql://user:your_password@localhost:5432/dbname"
 
 engine = create_engine(DB_URL)
 SessionLocal =sessionmaker(autocommit=False, autoflush=False, bind=engine)

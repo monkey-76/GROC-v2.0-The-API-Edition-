@@ -1,5 +1,8 @@
-from fastapi import FastAPI,Depends,HTTPException,File,UploadFile,Form
+from fastapi import FastAPI,Depends,HTTPException,File,UploadFile,Form #whats form 
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+import Oauth
 import database ,orm
 import uuid
 import datetime
@@ -7,10 +10,10 @@ from schemas import update_inventory as ui
 from schemas import img_caption
 from schemas import  U_details
 from hash import hash_pwd, verify_pwd
-import Oauth
-from fastapi.security import OAuth2PasswordRequestForm
-import shutil
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Header
+from s3_utils import s3_client, BUCKET_NAME
+import uuid
+
 
 app = FastAPI()
 
@@ -35,25 +38,26 @@ def get_db():
         db.close()
 
 @app.post("/login")
-def sign_in(credentials: OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db),):
-    record=db.query(orm.User).filter(orm.User.e_mail==credentials.username).first()
+def sign_in(credentials: OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db),owner_id: uuid.UUID = Depends(Header(...))):
+    record=db.query(orm.User).filter(orm.User.e_mail==credentials.username , orm.User.owner_id==owner_id).first()
     if not record or not verify_pwd(credentials.password,record.password):
        raise HTTPException(status_code=400 , detail="Invalid credentials")
     
-    access_token=Oauth.create_access_token(data={"user_id":str(record.user_id)})
+    access_token=Oauth.create_access_token(data={"user_id":str(record.user_id), "owner_id":str(record.owner_id)})
     return {"access_token": access_token, "token_type": "bearer"}#hwats bearer here what are the other types
 
 @app.post("/sign_up")
-def sign_up(data: U_details ,db: Session=Depends(get_db)):
-    hashed_pwd=hash_pwd(data.password)
+def sign_up(data: U_details, owner_id: uuid.UUID=Depends(Header(...)), db: Session = Depends(get_db)):
+    hashed_pwd = hash_pwd(data.password)
     details = orm.User(
         u_name=data.u_name,
         e_mail=data.e_mail,
-        password=hashed_pwd
+        password=hashed_pwd,
+        owner_id=owner_id 
     )
-
     db.add(details)
     db.commit()
+    return {"msg": "User created"}
 
 @app.put("/ineventory/user/upgrade")
 def to_be_seller(db : Session=Depends(get_db),current_user_id : str=Depends(Oauth.get_current_user)):
@@ -146,25 +150,39 @@ async def list_product(
     current_user: orm.User = Depends(Oauth.require_seller),
     db: Session = Depends(get_db)
 ):
-    # 1. Handle the file upload
-    file_path = f"static/uploads/{img.filename}"
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(img.file, buffer)
+    # 1. Generate a secure, unique filename
+    file_extension = img.filename.split(".")[-1]
+    unique_filename = f"products/{uuid.uuid4()}.{file_extension}"
     
-    # 2. Save to database (Note: the comma after price!)
+    # 2. Upload the file directly to AWS S3
+    try:
+        s3_client.upload_fileobj(
+            img.file,
+            BUCKET_NAME,
+            unique_filename,
+            ExtraArgs={"ContentType": img.content_type} # Ensures browsers display it as an image, not a download
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not upload image to S3: {str(e)}")
+    
+    # 3. Construct the public S3 URL
+    # Note: For the capstone, you will eventually replace this with a CloudFront URL!
+    s3_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{unique_filename}"
+    
+    # 4. Save to database using the S3 URL instead of a local path
     new_item = orm.Inventory(
         s_id=s_id,
         p_name=p_name,
         qty=qty,
         price=price,
-        img_caption={"img": f"/{file_path}", "caption": caption}
+        img_caption={"img": s3_url, "caption": caption}
     )
 
     db.add(new_item)
     db.commit()
     db.refresh(new_item)
     
-    return {"message": "Product listed!", "p_id": new_item.p_id}
+    return {"message": "Product listed!", "p_id": new_item.p_id, "image_url": s3_url}
     
 
 @app.put("/inventory/{p_id}")

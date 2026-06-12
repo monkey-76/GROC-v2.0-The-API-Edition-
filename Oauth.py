@@ -1,10 +1,19 @@
-import os #whats thise module for is it for managing what operating system go to files open files etc 
-from dotenv import load_dotenv #is thise a preinstalled ython library which already excists and whats thise for 
+import os 
+from dotenv import load_dotenv
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer # what a password berer
+from sqlalchemy.orm import Session
+import database
 import orm
+
+def get_db():
+    db=database.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 load_dotenv() # Injects your .env variables
 
@@ -13,16 +22,15 @@ SECRET_KEY = os.getenv("SECRET_KEY")#os helps look it for us so why we using dot
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
-# Tells FastAPI the "Login" route is where to get the token # okay thise is a fetcher we call encod_jwt in login route thise function fetches thise jwt tokenfom there for veriification and assign it to the header
+#whats thise can you tell me 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-#now what 
-def create_access_token(data: dict):
+
+def create_access_token(data: dict):#okay you should pass json data here right is thats the reason ypu gave dict
     to_encode = data.copy()
 
-    #thise sequence were code executes is eally suspiciouse lok firt not creation firt expiation then updating hu you need to create one before setting expiration and updating thise is more like refreshing token 
     # 1. SET THE EXPIRATION
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)#whats utc and time delta though
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)#look we are only setting the time not the time verification for expiratiion
     to_encode.update({"exp": expire})
     
     # 2. SIGN THE TOKEN(is thise the creation )
@@ -30,9 +38,8 @@ def create_access_token(data: dict):
     #whers the creation step
     return encoded_jwt
 
-#one more doubt jwt is 1 way lock its not rwo way and expires after 30 minutes means user have only 30 minutes to go through the website or the theft guy  aftr 30 min the user is kicked 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme)):#whats oauth2scheme there we have not even stored token as variabl yet 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -49,10 +56,23 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     
 
-def require_seller(current_user: orm.User = Depends(get_current_user)):
-    if not current_user.is_seller:
+def require_seller(current_user_id: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    # 1. Fetch the user using the string ID from the token
+    record = db.query(orm.User).filter(orm.User.user_id == current_user_id).first()
+    
+    # 2. Safety Check: Does the user still exist in the database?
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="User no longer exists."
+        )
+        
+    # 3. Permission Check: Are they a seller?
+    if not record.is_seller:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only sellers can perform this action."
         )
-    return current_user
+        
+    # 4. Return the full ORM User object!
+    return record

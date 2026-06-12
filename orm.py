@@ -8,8 +8,19 @@ from database import SessionLocal
 class Base(DeclarativeBase):
     pass
 
+class Tenants(Base):
+    __tablename__="tenants"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),primary_key=True,server_default=text("uuid_generate_v4()"))
+    app_name:Mapped[str] = mapped_column(String, nullable=False)
+    owner_email:Mapped[str] = mapped_column(String, unique=True, nullable= False)
+    owner_password:Mapped[str] = mapped_column(String, nullable= False)
+
+
 class User(Base):
     __tablename__ = "users"
+
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -27,6 +38,8 @@ class User(Base):
 
 class Inventory(Base):
     __tablename__ = "inventory" 
+
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
 
     p_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -49,6 +62,8 @@ class Inventory(Base):
 class Orders(Base):
     __tablename__ = "orders"
 
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+
     o_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
@@ -67,6 +82,8 @@ class Orders(Base):
 class Cart(Base):
     __tablename__ = "cart"
 
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True),
+
     cart_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
@@ -74,6 +91,24 @@ class Cart(Base):
     )
     p_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("inventory.p_id"), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.user_id"), nullable=False)
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), 
+        primary_key=True, 
+        server_default=text("uuid_generate_v4()")
+    )#thise is actuall api key
+    # Links this key to the specific business/developer
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    
+    # The actual key string (e.g., "sk_live_12345...")
+    key_string: Mapped[str] = mapped_column(String, unique=True, nullable=False)# whats thise  is thise is also api key but in str formatt
+    
+    # Allows a developer to pause a key without deleting it
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"), default=True)
+
 def main():
 
     def trying():
