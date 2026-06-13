@@ -82,7 +82,7 @@ class Orders(Base):
 class Cart(Base):
     __tablename__ = "cart"
 
-    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True),
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
 
     cart_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

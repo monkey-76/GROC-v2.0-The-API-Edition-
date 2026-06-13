@@ -1,27 +1,48 @@
-name: Ecommerce Backend CI/CD
+name: CI/CD Pipeline to EC2
 
-# 1. Tell GitHub WHEN to run this script
 on:
   push:
     branches:
       - main
 
-# 2. Tell GitHub WHAT to do
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Log into AWS and Deploy Code
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_KEY }}
-          # 3. The exact commands to run on your EC2 server
-          script: |
-            cd ~/groc-v2-backend
-            git pull origin main
-            source venv/bin/activate
-            pip install -r requirements.txt
-            sudo systemctl restart fastapi
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/finzaari-backend:latest
+
+    - name: Deploy to EC2 via SSH
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Stop and remove existing container if running
+          docker stop finzaari-container || true
+          docker rm finzaari-container || true
+          
+          # Pull the latest image
+          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/finzaari-backend:latest
+          
+          # Run the fresh container mapping host port 8000 to container port 8000
+          docker run -d \
+            name finzaari-container \
+            -p 8000:8000 \
+            --restart always \
+            ${{ secrets.DOCKER_HUB_USERNAME }}/finzaari-backend:latest

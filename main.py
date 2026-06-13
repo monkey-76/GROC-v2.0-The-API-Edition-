@@ -12,10 +12,13 @@ from schemas import  U_details
 from hash import hash_pwd, verify_pwd
 from fastapi import Header
 from s3_utils import s3_client, BUCKET_NAME
+from fastapi.responses import FileResponse
 import uuid
 
 
 app = FastAPI()
+
+
 
 # 1. Define who is allowed to talk to your server# really thise is enouph no need for guard right 
 origins = ["*"]
@@ -38,7 +41,7 @@ def get_db():
         db.close()
 
 @app.post("/login")
-def sign_in(credentials: OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db),owner_id: uuid.UUID = Depends(Header(...))):
+def sign_in(credentials: OAuth2PasswordRequestForm=Depends(),db:Session=Depends(get_db),owner_id: uuid.UUID = Header(...)):
     record=db.query(orm.User).filter(orm.User.e_mail==credentials.username , orm.User.owner_id==owner_id).first()
     if not record or not verify_pwd(credentials.password,record.password):
        raise HTTPException(status_code=400 , detail="Invalid credentials")
@@ -47,7 +50,7 @@ def sign_in(credentials: OAuth2PasswordRequestForm=Depends(),db:Session=Depends(
     return {"access_token": access_token, "token_type": "bearer"}#hwats bearer here what are the other types
 
 @app.post("/sign_up")
-def sign_up(data: U_details, owner_id: uuid.UUID=Depends(Header(...)), db: Session = Depends(get_db)):
+def sign_up(data: U_details, owner_id: uuid.UUID=Header(...), db: Session = Depends(get_db)):
     hashed_pwd = hash_pwd(data.password)
     details = orm.User(
         u_name=data.u_name,

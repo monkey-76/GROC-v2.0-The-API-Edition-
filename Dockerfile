@@ -1,20 +1,21 @@
-# 1. Pull a lightweight version of Python
-FROM python:3.10-slim
+FROM python:3.12-slim
 
-# 2. Tell Docker where to work inside the container
 WORKDIR /app
 
-# 3. Copy just the requirements file first (this makes future builds much faster)
-COPY requirements.txt .
+# Install system dependencies if required
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# 4. Install the Python dependencies (no venv needed in Docker!)
+# Copy requirements and install
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Copy the rest of your FastAPI code into the container
+# Copy the application code
 COPY . .
 
-# 6. Expose the port Uvicorn uses
+# Expose FastAPI default port
 EXPOSE 8000
 
-# 7. The exact command Docker will run when it wakes up
+# Run Uvicorn production server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
