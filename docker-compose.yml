@@ -1,11 +1,20 @@
 version: '3.8'
 
 services:
+  # 1. The FastAPI Backend
   api:
     build: .
-    container_name: finzaari-backend
+    container_name: finzaari-api
     ports:
       - "8000:8000"
-    restart: unless-stopped
-    env_file:
-      - .env
+    restart: always
+
+  # 2. The Streamlit Frontend
+  web:
+    build: ./frontend
+    container_name: finzaari-web
+    ports:
+      - "8501:8501"
+    restart: always
+    depends_on:
+      - api # Tells Docker to start the backend BEFORE the frontend
